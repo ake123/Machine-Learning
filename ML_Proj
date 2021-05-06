@@ -1,28 +1,3 @@
-import itertools
-import os
-import pandas as pd
-import re
-import codecs
-import html2text
-import numpy as np
-from sklearn.preprocessing import LabelBinarizer, LabelEncoder
-from keras.models import Sequential
-from keras.layers import Dense, Activation, Dropout
-from keras.preprocessing import text, sequence
-from keras import utils
-from pandas import Series
-from pandas import DataFrame
-from nltk.corpus import stopwords
-from pandas import Series
-from pandas import DataFrame
-from keras.preprocessing.text import Tokenizer
-from keras.preprocessing.sequence import pad_sequences
-from keras.models import Sequential
-from keras import layers
-from keras.models import model_from_json
-from keras.models import load_model
-from keras.preprocessing import text, sequence
-from keras import layers, models, optimizers
 
 def data(input_data):
     
