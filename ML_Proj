@@ -1,0 +1,145 @@
+import itertools
+import os
+import pandas as pd
+import re
+import codecs
+import html2text
+import numpy as np
+from sklearn.preprocessing import LabelBinarizer, LabelEncoder
+from keras.models import Sequential
+from keras.layers import Dense, Activation, Dropout
+from keras.preprocessing import text, sequence
+from keras import utils
+from pandas import Series
+from pandas import DataFrame
+from nltk.corpus import stopwords
+from pandas import Series
+from pandas import DataFrame
+from keras.preprocessing.text import Tokenizer
+from keras.preprocessing.sequence import pad_sequences
+from keras.models import Sequential
+from keras import layers
+from keras.models import model_from_json
+from keras.models import load_model
+from keras.preprocessing import text, sequence
+from keras import layers, models, optimizers
+
+def data(input_data):
+    
+    #Read data from file
+    df= pd.read_csv(input_data,header = 0, delimiter = ',', encoding="iso-8859-1")
+    df['source'].replace(' ', np.nan, inplace=True)
+    dff=df.dropna()
+    text=[]
+    try:
+        for i in range(0, len(dff['source'])):
+            h = html2text.HTML2Text()
+            h.ignore_images=True
+            h.ignore_tables=True
+            h.ignore_emphasis=True
+            h.ignore_links=True
+            h.unicode_snob = True
+            h.inline_links=False
+            a= h.handle(dff.iloc[i]['source']).split(" ")
+            text_tt = ' '.join(chunk for chunk in a if chunk)
+            new=re.sub("[^A-Za-z0-9]+", " ", text_tt).lower()
+            text.append(new.decode('iso-8859-1','ignore'))
+    except ValueError:
+        pass        
+    words=text
+    words1 = [w for w in words if not w in stopwords.words("finnish")]
+    words2 = [w for w in words1 if not w in stopwords.words("english")]
+    words3= [w for w in words2 if not w in stopwords.words("swedish")]
+    dfff = pd.DataFrame({'text':words3})
+    dffff=df['IndustryCategory']
+    dfffff=df['domain']
+    df_new = pd.concat([dfffff,dfff,dffff],axis=1)
+    df_new['text'].replace(' ', np.nan, inplace=True)
+    df_new['IndustryCategory'].replace(' ', np.nan, inplace=True)
+    df_neww=df_new.dropna()
+    df_neww.to_csv("clean_data.csv", sep=',', encoding='utf-8',index = False)
+    df_neww = pd.read_csv("clean_data.csv",header = 0, delimiter = ',', encoding="utf-8")
+    total_size = int(len(df_neww.index))
+    training_ratio = 0.8
+    training_size = int(total_size*training_ratio)
+    validation_size = int(total_size*(1-training_ratio))
+    Train_df = df_neww.head(training_size)
+    Test_df = df_neww.tail(validation_size)
+    return (Test_df.to_csv("test_data.csv", sep=',', encoding='iso-8859-1',index = False),Train_df.to_csv("train_data.csv", sep=',', encoding='iso-8859-1',index = False))
+
+def model_train_save(train_data):
+    Train_df = pd.read_csv(train_data,header = 0, delimiter = ',', encoding="iso-8859-1")
+    X_train = Train_df.text
+    y_train = Train_df.IndustryCategory
+    tokenizer = Tokenizer(num_words=5000)
+    tokenizer.fit_on_texts(X_train)
+    X_train = tokenizer.texts_to_sequences(X_train)
+    vocab_size = len(tokenizer.word_index) + 1  # Adding 1 because of reserved 0 index
+    maxlen = 100
+    X_train = pad_sequences(X_train, padding='post', maxlen=maxlen)
+    encoder = LabelEncoder()
+    encoder.fit(y_train)
+    y_train = encoder.transform(y_train)
+    num_classes = np.max(y_train) + 1
+    y_train = utils.to_categorical(y_train, num_classes)
+    embedding_dim = 50
+    model = Sequential()
+    model.add(layers.Embedding(input_dim=vocab_size, output_dim=embedding_dim, input_length=maxlen))
+    model.add(layers.Flatten())
+    model.add(layers.Dense(10, activation='relu'))
+    model.add(layers.Dense(num_classes, activation='sigmoid'))
+    model.compile(optimizer='adam',loss='binary_crossentropy',metrics=['accuracy'])
+    model.summary()
+    history = model.fit(np.array(X_train), np.array(y_train),epochs=2,verbose=False,batch_size=10)
+    loss, Training_accuracy = model.evaluate(X_train, y_train, verbose=False)
+    print("Training Accuracy: {:.4f}".format(Training_accuracy))
+    # serialize model to JSON
+    #  the keras model which is trained is defined as 'model' 
+    model_json = model.to_json()
+    with open("model_num.json", "w") as json_file:
+        json_file.write(model_json)
+
+    # serialize weights to HDF5
+    model.save_weights("model_num.h5")
+    # load json and create model
+    json_file = open('model_num.json', 'r')
+    loaded_model_json = json_file.read()
+    json_file.close()
+    loaded_model = model_from_json(loaded_model_json)
+    # load weights into new model
+    loaded_model.load_weights("model_num.h5")
+    #print("Loaded model from disk")
+    return (loaded_model.save('model_num.hdf5'))
+
+def predict(test_data):
+    Test_df = pd.read_csv(test_data,header = 0, delimiter = ',', encoding="iso-8859-1")
+    X_test = Test_df.text
+    y_test = Test_df.IndustryCategory
+    tokenizer = Tokenizer(num_words=5000)
+    tokenizer.fit_on_texts(X_test)
+    X_test = tokenizer.texts_to_sequences(X_test)
+    maxlen = 100
+    X_test = pad_sequences(X_test, padding='post', maxlen=maxlen)
+    encoder = LabelEncoder()
+    encoder.fit(y_test)
+    y_test = encoder.transform(y_test)
+    num_classes = np.max(y_test) + 1
+    y_test = utils.to_categorical(y_test, num_classes)
+    loaded_model=load_model('model_num.hdf5')
+    loaded_model.compile(optimizer='adam',loss='binary_crossentropy',metrics=['accuracy'])
+    loss, Test_accuracy = loaded_model.evaluate(X_test, y_test, verbose=False)
+    prediction_new=loaded_model.predict_classes(X_test)
+    prediction_class=encoder.inverse_transform(prediction_new)
+    df_pre = pd.DataFrame({'prediction':prediction_class})
+    Test_df=Test_df.reset_index(drop=True)
+    df_out = pd.concat([Test_df,df_pre],axis=1)
+    df_outt=df_out.drop(columns=['text'])
+    pred=[]
+    pred.append(loaded_model.predict_proba(X_test))
+    precision=[]
+    for i in pred:
+        for x, y, z,n in i:
+            precision.append(round(max(x, y,z,n),2))
+    df_pre = pd.DataFrame({'precision':precision})
+    df_final=pd.concat([df_outt,df_pre],axis=1)
+    return (df_final.to_csv("category_prediction.csv", sep=',', encoding='iso-8859-1',index = False))
