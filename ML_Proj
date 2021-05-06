@@ -1,47 +1,4 @@
 
-def data(input_data):
-    
-    #Read data from file
-    df= pd.read_csv(input_data,header = 0, delimiter = ',', encoding="iso-8859-1")
-    df['source'].replace(' ', np.nan, inplace=True)
-    dff=df.dropna()
-    text=[]
-    try:
-        for i in range(0, len(dff['source'])):
-            h = html2text.HTML2Text()
-            h.ignore_images=True
-            h.ignore_tables=True
-            h.ignore_emphasis=True
-            h.ignore_links=True
-            h.unicode_snob = True
-            h.inline_links=False
-            a= h.handle(dff.iloc[i]['source']).split(" ")
-            text_tt = ' '.join(chunk for chunk in a if chunk)
-            new=re.sub("[^A-Za-z0-9]+", " ", text_tt).lower()
-            text.append(new.decode('iso-8859-1','ignore'))
-    except ValueError:
-        pass        
-    words=text
-    words1 = [w for w in words if not w in stopwords.words("finnish")]
-    words2 = [w for w in words1 if not w in stopwords.words("english")]
-    words3= [w for w in words2 if not w in stopwords.words("swedish")]
-    dfff = pd.DataFrame({'text':words3})
-    dffff=df['IndustryCategory']
-    dfffff=df['domain']
-    df_new = pd.concat([dfffff,dfff,dffff],axis=1)
-    df_new['text'].replace(' ', np.nan, inplace=True)
-    df_new['IndustryCategory'].replace(' ', np.nan, inplace=True)
-    df_neww=df_new.dropna()
-    df_neww.to_csv("clean_data.csv", sep=',', encoding='utf-8',index = False)
-    df_neww = pd.read_csv("clean_data.csv",header = 0, delimiter = ',', encoding="utf-8")
-    total_size = int(len(df_neww.index))
-    training_ratio = 0.8
-    training_size = int(total_size*training_ratio)
-    validation_size = int(total_size*(1-training_ratio))
-    Train_df = df_neww.head(training_size)
-    Test_df = df_neww.tail(validation_size)
-    return (Test_df.to_csv("test_data.csv", sep=',', encoding='iso-8859-1',index = False),Train_df.to_csv("train_data.csv", sep=',', encoding='iso-8859-1',index = False))
-
 def model_train_save(train_data):
     Train_df = pd.read_csv(train_data,header = 0, delimiter = ',', encoding="iso-8859-1")
     X_train = Train_df.text
